@@ -1,0 +1,105 @@
+# Publish the static site to Bluehost with scp.
+#
+# The matching public key is already in ~/.ssh/authorized_keys on Bluehost.
+# Add the private key and connection details as repository secrets
+# (Settings → Secrets and variables → Actions):
+#
+#   gh secret set BLUEHOST_HOST
+#   gh secret set BLUEHOST_USER
+#   gh secret set BLUEHOST_SSH_KEY < /path/to/private-key
+#
+# BLUEHOST_SSH_KEY must be the full private key, including the BEGIN and END
+# lines, and it must not have a passphrase. Actions cannot prompt for one.
+#
+# Optional repository variable:
+#   BLUEHOST_SERVER_DIR   Path relative to the SSH login directory.
+#                         Default: public_html/note-quiz
+#   BLUEHOST_SSH_PORT     Default: 22
+
+name: Publish to Bluehost
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Show what would be uploaded without changing the server
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Upload site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stage site
+        run: |
+          rm -rf dist
+          mkdir -p dist/vendor
+          cp index.html dist/index.html
+          cp node_modules/vexflow/build/cjs/vexflow.js dist/vendor/vexflow.js
+          sed -i 's|node_modules/vexflow/build/cjs/vexflow.js|vendor/vexflow.js|' dist/index.html
+          grep -q 'src="vendor/vexflow.js"' dist/index.html
+
+      - name: Upload to Bluehost
+        env:
+          BLUEHOST_HOST: ${{ secrets.BLUEHOST_HOST }}
+          BLUEHOST_USER: ${{ secrets.BLUEHOST_USER }}
+          BLUEHOST_SSH_KEY: ${{ secrets.BLUEHOST_SSH_KEY }}
+          BLUEHOST_SERVER_DIR: ${{ vars.BLUEHOST_SERVER_DIR }}
+          BLUEHOST_SSH_PORT: ${{ vars.BLUEHOST_SSH_PORT != '' && vars.BLUEHOST_SSH_PORT || '22' }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BLUEHOST_HOST}" ] || [ -z "${BLUEHOST_USER}" ] || [ -z "${BLUEHOST_SSH_KEY}" ]; then
+            echo "Set the BLUEHOST_HOST, BLUEHOST_USER, and BLUEHOST_SSH_KEY repository secrets."
+            exit 1
+          fi
+
+          dest="${BLUEHOST_SERVER_DIR:-public_html/note-quiz}"
+          dest="${dest%/}"
+          case "${dest}" in
+            ''|-*|*..*|*[[:space:]]*|*"'"*)
+              echo "BLUEHOST_SERVER_DIR must be a relative path without spaces."
+              exit 1
+              ;;
+          esac
+
+          echo "Destination: ${BLUEHOST_USER}@${BLUEHOST_HOST}:${dest}/"
+          find dist -type f | sort
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Dry run; nothing uploaded."
+            exit 0
+          fi
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${BLUEHOST_SSH_KEY}" > ~/.ssh/bluehost
+          chmod 600 ~/.ssh/bluehost
+          ssh-keyscan -p "${BLUEHOST_SSH_PORT}" -H "${BLUEHOST_HOST}" >> ~/.ssh/known_hosts
+
+          ssh_opts=(
+            -i ~/.ssh/bluehost
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=accept-new
+            -p "${BLUEHOST_SSH_PORT}"
+          )
+          ssh "${ssh_opts[@]}" "${BLUEHOST_USER}@${BLUEHOST_HOST}" "mkdir -p '${dest}'"
+          scp -i ~/.ssh/bluehost -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+            -P "${BLUEHOST_SSH_PORT}" -r dist/. "${BLUEHOST_USER}@${BLUEHOST_HOST}:${dest}/"
