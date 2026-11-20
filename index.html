@@ -34,7 +34,12 @@
  <body>
   <h1>Note Quiz</h1>
   <h2>Play the randomly-selected note(s).</h2>
-  <h3>Instrument: Baritone Horn (Bass Clef)</h3>
+  <h3>
+   <label>
+    Instrument
+    <select id="instrument"></select>
+   </label>
+  </h3>
   <div id="output"></div>
   <div class="controls">
    <label>
@@ -47,9 +52,13 @@
    <button id="next" type="button">New note</button>
   </div>
   <script>
-    // Concert pitch, bass clef. E2 is MIDI 40 and G4 is MIDI 67.
-    const LOW = 40;
-    const HIGH = 67;
+    // low/high are written pitches as MIDI numbers: E2=40, G4=67, F3=53, A5=81.
+    // transpose is semitones from written to sounding pitch (for future audio).
+    const INSTRUMENTS = [
+      { name: 'Baritone Horn (Bass Clef)', clef: 'bass', low: 40, high: 67, transpose: 0 },
+      { name: 'Baritone Horn (Treble Clef)', clef: 'treble', low: 53, high: 81, transpose: -14 },
+    ];
+    let instrument = INSTRUMENTS[0];
     const SPELLING = ['c', 'db', 'd', 'eb', 'e', 'f', 'gb', 'g', 'ab', 'a', 'bb', 'b'];
 
     function midiToName(midi) {
@@ -57,7 +66,7 @@
     }
 
     function randomMidi() {
-      return LOW + Math.floor(Math.random() * (HIGH - LOW + 1));
+      return instrument.low + Math.floor(Math.random() * (instrument.high - instrument.low + 1));
     }
 
     function parseNote(name) {
@@ -96,7 +105,7 @@
       const note = new VexFlow.StaveNote({
         keys: [parsed.key],
         duration: duration,
-        clef: 'bass',
+        clef: instrument.clef,
         autoStem: duration !== 'w',
       });
       if (parsed.accidental) {
@@ -116,7 +125,7 @@
       const context = renderer.getContext();
 
       const stave = new VexFlow.Stave(8, 62, width - 16);
-      stave.addClef('bass');
+      stave.addClef(instrument.clef);
       if (two) stave.addTimeSignature('4/4');
       stave.setContext(context).draw();
 
@@ -144,6 +153,15 @@
     }
 
     const modeSelect = document.getElementById('mode');
+    const instrumentSelect = document.getElementById('instrument');
+    INSTRUMENTS.forEach((inst, i) => {
+      instrumentSelect.add(new Option(inst.name, i));
+    });
+    instrumentSelect.addEventListener('change', () => {
+      instrument = INSTRUMENTS[Number(instrumentSelect.value)];
+      current = randomExercise(modeSelect.value);
+      show(current);
+    });
     const nextButton = document.getElementById('next');
     let current = randomExercise(modeSelect.value);
 
