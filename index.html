@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="UTF-8">
+  <title>Note Quiz</title>
+  <script src="node_modules/vexflow/build/cjs/vexflow.js"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 2rem;
+      color: #17283c;
+    }
+    #output {
+      width: max-content;
+      margin-bottom: 0.75rem;
+    }
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    label, button, select {
+      font: inherit;
+      font-size: 1rem;
+    }
+    select, button {
+      padding: 0.45rem 0.75rem;
+    }
+    button {
+      cursor: pointer;
+    }
+  </style>
+ </head>
+ <body>
+  <h1>Note Quiz</h1>
+  <h2>Play the randomly-selected note(s).</h2>
+  <div id="output"></div>
+  <div class="controls">
+   <label>
+    Mode
+    <select id="mode">
+     <option value="one">One note</option>
+     <option value="two">Two notes</option>
+    </select>
+   </label>
+   <button id="next" type="button">New note</button>
+  </div>
+  <script>
+    // Concert pitch, bass clef. E2 is MIDI 40 and G4 is MIDI 67.
+    const LOW = 40;
+    const HIGH = 67;
+    const SPELLING = ['c', 'db', 'd', 'eb', 'e', 'f', 'gb', 'g', 'ab', 'a', 'bb', 'b'];
+
+    function midiToName(midi) {
+      return SPELLING[midi % 12] + (Math.floor(midi / 12) - 1);
+    }
+
+    function randomMidi() {
+      return LOW + Math.floor(Math.random() * (HIGH - LOW + 1));
+    }
+
+    function parseNote(name) {
+      const match = name.match(/^([a-g])(bb|##|b|#|n)?(\d)$/);
+      return {
+        key: match[1] + (match[2] || '') + '/' + match[3],
+        accidental: match[2] || '',
+      };
+    }
+
+    function sameExercise(a, b) {
+      if (!a || !b || a.mode !== b.mode) return false;
+      if (a.mode === 'one') return a.midi === b.midi;
+      return a.start === b.start && a.end === b.end;
+    }
+
+    function randomPair() {
+      const start = randomMidi();
+      let end = start;
+      while (end === start) end = randomMidi();
+      return { start, end };
+    }
+
+    function randomExercise(mode, except) {
+      let next;
+      do {
+        next = mode === 'one'
+          ? { mode: 'one', midi: randomMidi() }
+          : { mode: 'two', ...randomPair() };
+      } while (sameExercise(next, except));
+      return next;
+    }
+
+    function makeStaveNote(midi, duration) {
+      const parsed = parseNote(midiToName(midi));
+      const note = new VexFlow.StaveNote({
+        keys: [parsed.key],
+        duration: duration,
+        clef: 'bass',
+        autoStem: duration !== 'w',
+      });
+      if (parsed.accidental) {
+        note.addModifier(new VexFlow.Accidental(parsed.accidental), 0);
+      }
+      return note;
+    }
+
+    function show(exercise) {
+      const output = document.getElementById('output');
+      output.replaceChildren();
+      const two = exercise.mode === 'two';
+      const width = two ? 480 : 280;
+      const height = 180;
+      const renderer = new VexFlow.Renderer(output, VexFlow.Renderer.Backends.SVG);
+      renderer.resize(width, height);
+      const context = renderer.getContext();
+
+      const stave = new VexFlow.Stave(8, 62, width - 16);
+      stave.addClef('bass');
+      if (two) stave.addTimeSignature('4/4');
+      stave.setContext(context).draw();
+
+      const midis = two
+        ? [exercise.start, exercise.end, exercise.start, exercise.end]
+        : [exercise.midi];
+      const notes = midis.map((midi) => makeStaveNote(midi, two ? 'q' : 'w'));
+      const voice = new VexFlow.Voice({ numBeats: 4, beatValue: 4 }).setStave(stave);
+      notes.forEach((note) => {
+        note.setStave(stave);
+        voice.addTickable(note);
+      });
+
+      const formatter = new VexFlow.Formatter().joinVoices([voice]);
+      const start = stave.getNoteStartX();
+      const end = stave.getNoteEndX();
+      formatter.format([voice], end - start);
+      if (!two) {
+        // Center the whole note, then format again so its accidental moves with it.
+        const left = Math.max(start, (start + end - notes[0].getWidth()) / 2);
+        stave.setNoteStartX(left);
+        formatter.format([voice], Math.max(notes[0].getWidth(), end - left));
+      }
+      voice.draw(context, stave);
+    }
+
+    const modeSelect = document.getElementById('mode');
+    const nextButton = document.getElementById('next');
+    let current = randomExercise(modeSelect.value);
+
+    function refreshLabel() {
+      nextButton.textContent = modeSelect.value === 'one' ? 'New note' : 'New notes';
+    }
+
+    refreshLabel();
+    show(current);
+    modeSelect.addEventListener('change', () => {
+      current = randomExercise(modeSelect.value);
+      refreshLabel();
+      show(current);
+    });
+    nextButton.addEventListener('click', () => {
+      current = randomExercise(modeSelect.value, current);
+      show(current);
+    });
+  </script>
+ </body>
+</html>
