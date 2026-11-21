@@ -47,7 +47,7 @@
      <option value="custom">Custom</option>
     </select>
    </label>
-   <span id="custom-range" hidden>
+   <span id="custom-range">
     <select id="low" aria-label="Lowest note"></select>
     to
     <select id="high" aria-label="Highest note"></select>
@@ -151,14 +151,19 @@
       return SPELLING[midi % 12] + (Math.floor(midi / 12) - 1);
     }
 
+    // The endpoint dropdowns always show the active range.
     function activeRange() {
-      switch (rangeSelect.value) {
-        case 'comfortable':
-          return { low: instrument.comfortLow, high: instrument.comfortHigh };
-        case 'custom':
-          return { low: Number(lowSelect.value), high: Number(highSelect.value) };
-        default:
-          return { low: instrument.low, high: instrument.high };
+      return { low: Number(lowSelect.value), high: Number(highSelect.value) };
+    }
+
+    // Set the endpoint dropdowns to match the Full or Comfortable preset.
+    function applyPreset() {
+      if (rangeSelect.value === 'comfortable') {
+        lowSelect.value = instrument.comfortLow;
+        highSelect.value = instrument.comfortHigh;
+      } else if (rangeSelect.value === 'full') {
+        lowSelect.value = instrument.low;
+        highSelect.value = instrument.high;
       }
     }
 
@@ -292,7 +297,6 @@
     const rangeSelect = document.getElementById('range');
     const lowSelect = document.getElementById('low');
     const highSelect = document.getElementById('high');
-    const customRange = document.getElementById('custom-range');
 
     function noteLabel(midi) {
       const name = midiToName(midi);
@@ -307,8 +311,7 @@
         lowSelect.add(new Option(noteLabel(m), m));
         highSelect.add(new Option(noteLabel(m), m));
       }
-      lowSelect.value = instrument.low;
-      highSelect.value = instrument.high;
+      applyPreset();
     }
 
     // Keep the custom range at least two notes wide (two-note mode needs it).
@@ -333,12 +336,13 @@
 
     fillCustomRange();
     rangeSelect.addEventListener('change', () => {
-      customRange.hidden = rangeSelect.value !== 'custom';
+      applyPreset();
       current = randomExercise(modeSelect.value);
       show(current);
     });
     [['low', lowSelect], ['high', highSelect]].forEach(([which, select]) => {
       select.addEventListener('change', () => {
+        rangeSelect.value = 'custom';
         normalizeCustomRange(which);
         current = randomExercise(modeSelect.value);
         show(current);
@@ -347,9 +351,8 @@
 
     instrumentSelect.addEventListener('change', () => {
       instrument = INSTRUMENTS[Number(instrumentSelect.value)];
-      fillCustomRange();
       rangeSelect.value = 'full';
-      customRange.hidden = true;
+      fillCustomRange();
       current = randomExercise(modeSelect.value);
       show(current);
     });
