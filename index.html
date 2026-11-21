@@ -50,6 +50,7 @@
     </select>
    </label>
    <button id="next" type="button">New note</button>
+   <button id="play" type="button">Play</button>
   </div>
   <script>
     const SPELLING = ['c', 'db', 'd', 'eb', 'e', 'f', 'gb', 'g', 'ab', 'a', 'bb', 'b'];
@@ -171,6 +172,42 @@
       return note;
     }
 
+    function exerciseMidis(exercise) {
+      return exercise.mode === 'two'
+        ? [exercise.start, exercise.end, exercise.start, exercise.end]
+        : [exercise.midi];
+    }
+
+    const BPM = 80;
+    let audioContext = null;
+
+    // Plays the written notes at their sounding pitch (written + transpose).
+    function playExercise(exercise) {
+      audioContext = audioContext || new AudioContext();
+      if (audioContext.state === 'suspended') audioContext.resume();
+      const midis = exerciseMidis(exercise);
+      const beats = 4 / midis.length;
+      const seconds = beats * 60 / BPM;
+      const t0 = audioContext.currentTime + 0.05;
+      midis.forEach((midi, i) => {
+        const sounding = midi + instrument.transpose;
+        const freq = 440 * Math.pow(2, (sounding - 69) / 12);
+        const start = t0 + i * seconds;
+        const stop = start + seconds;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.3, start + 0.02);
+        gain.gain.setValueAtTime(0.3, stop - 0.08);
+        gain.gain.linearRampToValueAtTime(0, stop - 0.02);
+        osc.connect(gain).connect(audioContext.destination);
+        osc.start(start);
+        osc.stop(stop);
+      });
+    }
+
     function show(exercise) {
       const output = document.getElementById('output');
       output.replaceChildren();
@@ -186,9 +223,7 @@
       if (two) stave.addTimeSignature('4/4');
       stave.setContext(context).draw();
 
-      const midis = two
-        ? [exercise.start, exercise.end, exercise.start, exercise.end]
-        : [exercise.midi];
+      const midis = exerciseMidis(exercise);
       const notes = midis.map((midi) => makeStaveNote(midi, two ? 'q' : 'w'));
       const voice = new VexFlow.Voice({ numBeats: 4, beatValue: 4 }).setStave(stave);
       notes.forEach((note) => {
@@ -232,6 +267,9 @@
       current = randomExercise(modeSelect.value);
       refreshLabel();
       show(current);
+    });
+    document.getElementById('play').addEventListener('click', () => {
+      playExercise(current);
     });
     nextButton.addEventListener('click', () => {
       current = randomExercise(modeSelect.value, current);
