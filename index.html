@@ -39,16 +39,6 @@
     Instrument
     <select id="instrument"></select>
    </label>
-  </h3>
-  <div id="output"></div>
-  <div class="controls">
-   <label>
-    Mode
-    <select id="mode">
-     <option value="one">One note</option>
-     <option value="two">Two notes</option>
-    </select>
-   </label>
    <label>
     Range
     <select id="range">
@@ -62,6 +52,16 @@
     to
     <select id="high" aria-label="Highest note"></select>
    </span>
+  </h3>
+  <div id="output"></div>
+  <div class="controls">
+   <label>
+    Mode
+    <select id="mode">
+     <option value="one">One note</option>
+     <option value="two">Two notes</option>
+    </select>
+   </label>
    <button id="next" type="button">New note</button>
    <button id="play" type="button">Play</button>
   </div>
@@ -348,6 +348,8 @@
     instrumentSelect.addEventListener('change', () => {
       instrument = INSTRUMENTS[Number(instrumentSelect.value)];
       fillCustomRange();
+      rangeSelect.value = 'full';
+      customRange.hidden = true;
       current = randomExercise(modeSelect.value);
       show(current);
     });
