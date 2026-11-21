@@ -49,6 +49,19 @@
      <option value="two">Two notes</option>
     </select>
    </label>
+   <label>
+    Range
+    <select id="range">
+     <option value="full">Full</option>
+     <option value="comfortable">Comfortable</option>
+     <option value="custom">Custom</option>
+    </select>
+   </label>
+   <span id="custom-range" hidden>
+    <select id="low" aria-label="Lowest note"></select>
+    to
+    <select id="high" aria-label="Highest note"></select>
+   </span>
    <button id="next" type="button">New note</button>
    <button id="play" type="button">Play</button>
   </div>
@@ -64,7 +77,8 @@
       return NATURALS[match[1]] + shift + (Number(match[3]) + 1) * 12;
     }
 
-    // low/high are written pitches. transpose is semitones from written to
+    // low/high are the full range and comfortLow/comfortHigh the comfortable
+    // range, all as written pitches. transpose is semitones from written to
     // sounding pitch (for future audio).
     const INSTRUMENTS = [
       {
@@ -72,6 +86,8 @@
         clef: 'bass',
         low: noteToMidi('e2'),
         high: noteToMidi('g4'),
+        comfortLow: noteToMidi('a2'),
+        comfortHigh: noteToMidi('d4'),
         transpose: 0,
       },
       {
@@ -79,6 +95,8 @@
         clef: 'treble',
         low: noteToMidi('f3'),
         high: noteToMidi('a5'),
+        comfortLow: noteToMidi('b3'),
+        comfortHigh: noteToMidi('e5'),
         transpose: -14,
       },
       {
@@ -86,6 +104,8 @@
         clef: 'treble',
         low: noteToMidi('c4'),
         high: noteToMidi('d7'),
+        comfortLow: noteToMidi('c4'),
+        comfortHigh: noteToMidi('a6'),
         transpose: 0,
       },
       {
@@ -93,6 +113,8 @@
         clef: 'treble',
         low: noteToMidi('e3'),
         high: noteToMidi('d7'),
+        comfortLow: noteToMidi('e3'),
+        comfortHhigh: noteToMidi('e6'),
         transpose: -12,
       },
       {
@@ -100,6 +122,8 @@
         clef: 'bass',
         low: noteToMidi('e2'),
         high: noteToMidi('g4'),
+        comfortLow: noteToMidi('a2'),
+        comfortHigh: noteToMidi('d4'),
         transpose: 0,
       },
       {
@@ -107,6 +131,8 @@
         clef: 'treble',
         low: noteToMidi('g3'),
         high: noteToMidi('c6'),
+        comfortLow: noteToMidi('c4'),
+        comfortHigh: noteToMidi('e5'),
         transpose: 0,
       },
       {
@@ -114,6 +140,8 @@
         clef: 'alto',
         low: noteToMidi('c3'),
         high: noteToMidi('e6'),
+        comfortLow: noteToMidi('c3'),
+        comfortHigh: noteToMidi('a5'),
         transpose: 0,
       },
     ];
@@ -123,8 +151,20 @@
       return SPELLING[midi % 12] + (Math.floor(midi / 12) - 1);
     }
 
+    function activeRange() {
+      switch (rangeSelect.value) {
+        case 'comfortable':
+          return { low: instrument.comfortLow, high: instrument.comfortHigh };
+        case 'custom':
+          return { low: Number(lowSelect.value), high: Number(highSelect.value) };
+        default:
+          return { low: instrument.low, high: instrument.high };
+      }
+    }
+
     function randomMidi() {
-      return instrument.low + Math.floor(Math.random() * (instrument.high - instrument.low + 1));
+      const { low, high } = activeRange();
+      return low + Math.floor(Math.random() * (high - low + 1));
     }
 
     function parseNote(name) {
@@ -249,8 +289,65 @@
     INSTRUMENTS.forEach((inst, i) => {
       instrumentSelect.add(new Option(inst.name, i));
     });
+    const rangeSelect = document.getElementById('range');
+    const lowSelect = document.getElementById('low');
+    const highSelect = document.getElementById('high');
+    const customRange = document.getElementById('custom-range');
+
+    function noteLabel(midi) {
+      const name = midiToName(midi);
+      return name[0].toUpperCase() + name.slice(1).replace('b', '\u266d');
+    }
+
+    // Offer every note of the instrument's full range as a custom endpoint.
+    function fillCustomRange() {
+      lowSelect.replaceChildren();
+      highSelect.replaceChildren();
+      for (let m = instrument.low; m <= instrument.high; m++) {
+        lowSelect.add(new Option(noteLabel(m), m));
+        highSelect.add(new Option(noteLabel(m), m));
+      }
+      lowSelect.value = instrument.low;
+      highSelect.value = instrument.high;
+    }
+
+    // Keep the custom range at least two notes wide (two-note mode needs it).
+    function normalizeCustomRange(changed) {
+      let lo = Number(lowSelect.value);
+      let hi = Number(highSelect.value);
+      if (lo < hi) return;
+      if (changed === 'low') {
+        if (lo >= instrument.high) {
+          lo = instrument.high - 1;
+          lowSelect.value = lo;
+        }
+        highSelect.value = lo + 1;
+      } else {
+        if (hi <= instrument.low) {
+          hi = instrument.low + 1;
+          highSelect.value = hi;
+        }
+        lowSelect.value = hi - 1;
+      }
+    }
+
+    fillCustomRange();
+    rangeSelect.addEventListener('change', () => {
+      customRange.hidden = rangeSelect.value !== 'custom';
+      current = randomExercise(modeSelect.value);
+      show(current);
+    });
+    [['low', lowSelect], ['high', highSelect]].forEach(([which, select]) => {
+      select.addEventListener('change', () => {
+        normalizeCustomRange(which);
+        current = randomExercise(modeSelect.value);
+        show(current);
+      });
+    });
+
     instrumentSelect.addEventListener('change', () => {
       instrument = INSTRUMENTS[Number(instrumentSelect.value)];
+      fillCustomRange();
       current = randomExercise(modeSelect.value);
       show(current);
     });
