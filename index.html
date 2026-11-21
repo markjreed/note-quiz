@@ -52,14 +52,43 @@
    <button id="next" type="button">New note</button>
   </div>
   <script>
-    // low/high are written pitches as MIDI numbers: E2=40, G4=67, F3=53, A5=81.
-    // transpose is semitones from written to sounding pitch (for future audio).
+    const SPELLING = ['c', 'db', 'd', 'eb', 'e', 'f', 'gb', 'g', 'ab', 'a', 'bb', 'b'];
+    const NATURALS = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+
+    // 'e2' -> 40, 'bb3' -> 58, 'f#3' -> 54 (C4 = 60).
+    function noteToMidi(name) {
+      const match = name.toLowerCase().match(/^([a-g])(bb|##|b|#)?(\d)$/);
+      if (!match) throw new Error('Bad note name: ' + name);
+      const shift = { '': 0, '#': 1, '##': 2, b: -1, bb: -2 }[match[2] || ''];
+      return NATURALS[match[1]] + shift + (Number(match[3]) + 1) * 12;
+    }
+
+    // low/high are written pitches. transpose is semitones from written to
+    // sounding pitch (for future audio).
     const INSTRUMENTS = [
-      { name: 'Baritone Horn (Bass Clef)', clef: 'bass', low: 40, high: 67, transpose: 0 },
-      { name: 'Baritone Horn (Treble Clef)', clef: 'treble', low: 53, high: 81, transpose: -14 },
+      {
+        name: 'Baritone Horn (Bass Clef)',
+        clef: 'bass',
+        low: noteToMidi('e2'),
+        high: noteToMidi('g4'),
+        transpose: 0,
+      },
+      {
+        name: 'Baritone Horn (Treble Clef)',
+        clef: 'treble',
+        low: noteToMidi('f3'),
+        high: noteToMidi('a5'),
+        transpose: -14,
+      },
+      {
+        name: 'Trombone',
+        clef: 'bass',
+        low: noteToMidi('e2'),
+        high: noteToMidi('g4'),
+        transpose: 0,
+      },
     ];
     let instrument = INSTRUMENTS[0];
-    const SPELLING = ['c', 'db', 'd', 'eb', 'e', 'f', 'gb', 'g', 'ab', 'a', 'bb', 'b'];
 
     function midiToName(midi) {
       return SPELLING[midi % 12] + (Math.floor(midi / 12) - 1);
